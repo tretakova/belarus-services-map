@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Экспорт услуг Беларуси — Карта направлений</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;1,300&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+:root {
+  --ink:      #0f1923;
+  --paper:    #f7f4ee;
+  --accent:   #c8501a;
+  --accent2:  #1a6e8e;
+  --gold:     #b8972a;
+  --muted:    #8a8278;
+  --border:   #d8d2c4;
+  --card:     rgba(247,244,238,0.97);
+  --shadow:   0 8px 40px rgba(15,25,35,0.18);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: var(--ink);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 40px;
+}
+
+/* ── HEADER ── */
+.header {
+  width: 100%;
+  max-width: 1180px;
+  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.header-left h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(1.4rem, 3vw, 2.1rem);
+  color: var(--paper);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.header-left h1 span { color: var(--gold); }
+
+.header-left p {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.header-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.stat {
+  text-align: right;
+}
+
+.stat-val {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.4rem;
+  color: var(--paper);
+  font-weight: 500;
+  display: block;
+  line-height: 1;
+}
+
+.stat-lbl {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── TABS ── */
+.tabs {
+  width: 100%;
+  max-width: 1180px;
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.tab {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-weight: 500;
+  padding: 7px 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.tab.active, .tab:hover {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--paper);
+}
+
+/* ── MAP SHELL ── */
+.map-shell {
+  width: 100%;
+  max-width: 1180px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: var(--shadow);
+  position: relative;
+}
+
+#map {
+  height: 560px;
+  width: 100%;
+  background: #0f1923;
+}
+
+/* ── FLOATING PANEL ── */
+.info-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 1000;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px 18px;
+  width: 270px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  transition: all .3s ease;
+}
+
+.info-panel.hidden { opacity: 0; pointer-events: none; transform: translateX(-8px); }
+
+.info-panel .country-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.2rem;
+  color: var(--ink);
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-panel .flag { font-size: 1.4rem; }
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 7px;
+  font-size: 0.82rem;
+}
+
+.info-row .lbl { color: var(--muted); font-weight: 300; }
+.info-row .val {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 500;
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+
+.info-bar-wrap { margin: 10px 0 8px; }
+.info-bar-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+.info-bar-track { height: 6px; background: var(--border); border-radius: 3px; }
+.info-bar-fill { height: 6px; border-radius: 3px; background: var(--accent); transition: width .5s ease; }
+
+.info-desc {
+  font-size: 0.78rem;
+  color: #555;
+  line-height: 1.55;
+  margin-top: 10px;
+  font-style: italic;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.info-panel .hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 10px;
+  text-align: center;
+  font-style: italic;
+}
+
+/* ── LEGEND ── */
+.legend-box {
+  position: absolute;
+  bottom: 32px;
+  right: 12px;
+  z-index: 1000;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  min-width: 170px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+
+.legend-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.legend-dot {
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(0,0,0,0.1);
+}
+
+.legend-row span { font-size: 0.77rem; color: var(--ink); }
+
+/* ── RANKING PANEL ── */
+.rank-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  width: 220px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+.rank-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.rank-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  padding: 3px 4px;
+  border-radius: 4px;
+  transition: background .15s;
+}
+
+.rank-item:hover { background: rgba(200,80,26,0.07); }
+
+.rank-num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--muted);
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.rank-bar-wrap { flex: 1; }
+.rank-country { font-size: 0.78rem; color: var(--ink); margin-bottom: 3px; font-weight: 500; }
+.rank-track { height: 4px; background: var(--border); border-radius: 2px; }
+.rank-fill { height: 4px; border-radius: 2px; background: var(--accent2); }
+.rank-val { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--muted); flex-shrink: 0; }
+
+/* ── FOOTER ── */
+.footer {
+  width: 100%;
+  max-width: 1180px;
+  margin-top: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.footer p {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.25);
+  font-style: italic;
+}
+
+/* Leaflet tweaks */
+.leaflet-control-attribution { display: none !important; }
+.leaflet-control-zoom a {
+  background: var(--paper) !important;
+  color: var(--ink) !important;
+  border-color: var(--border) !important;
+  font-family: 'IBM Plex Mono', monospace !important;
+}
+.leaflet-popup-content-wrapper { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>Ключевые направления<br>экспорта услуг <span>Республики Беларусь</span></h1>
+    <p>По данным Белстат · 2021 год · топ-10 стран-партнёров</p>
+  </div>
+  <div class="header-stats">
+    <div class="stat">
+      <span class="stat-val">9 618</span>
+      <span class="stat-lbl">млн долл. — всего</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">74,5%</span>
+      <span class="stat-lbl">топ-10 / общий экспорт</span>
+    </div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="setLayer('all')">Все услуги</button>
+  <button class="tab" onclick="setLayer('it')">IT и цифровые</button>
+  <button class="tab" onclick="setLayer('transport')">Транспорт</button>
+  <button class="tab" onclick="setLayer('construction')">Строительство</button>
+</div>
+
+<div class="map-shell">
+  <div id="map"></div>
+
+  <!-- Левая панель: детальная инфо -->
+  <div class="info-panel hidden" id="infoPanel">
+    <div class="country-name">
+      <span class="flag" id="iFlag"></span>
+      <span id="iName">—</span>
+    </div>
+    <div class="info-row">
+      <span class="lbl">Экспорт услуг</span>
+      <span class="val" id="iVal">—</span>
+    </div>
+    <div class="info-row">
+      <span class="lbl">Доля в экспорте</span>
+      <span class="val" id="iShare">—</span>
+    </div>
+    <div class="info-row">
+      <span class="lbl">Ключевой сектор</span>
+      <span class="val" id="iSector">—</span>
+    </div>
+    <div class="info-bar-wrap">
+      <div class="info-bar-label">Удельный вес в структуре</div>
+      <div class="info-bar-track"><div class="info-bar-fill" id="iBar" style="width:0%"></div></div>
+    </div>
+    <div class="info-desc" id="iDesc">—</div>
+    <div class="hint">← Нажмите на другой маркер</div>
+  </div>
+
+  <!-- Правая панель: рейтинг -->
+  <div class="rank-panel" id="rankPanel">
+    <div class="rank-title">Рейтинг стран-партнёров</div>
+    <div id="rankList"></div>
+  </div>
+
+  <!-- Легенда -->
+  <div class="legend-box">
+    <div class="legend-title">Объём экспорта</div>
+    <div class="legend-row">
+      <div class="legend-dot" style="width:32px;height:32px;background:#b83215;opacity:.85;"></div>
+      <span>&gt; 1 000 млн $</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-dot" style="width:22px;height:22px;background:#c8501a;opacity:.8;"></div>
+      <span>500 – 1 000 млн $</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-dot" style="width:16px;height:16px;background:#1a6e8e;opacity:.8;"></div>
+      <span>300 – 500 млн $</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-dot" style="width:11px;height:11px;background:#1a8e6e;opacity:.8;"></div>
+      <span>150 – 300 млн $</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-dot" style="width:8px;height:8px;background:#8a8278;opacity:.85;"></div>
+      <span>&lt; 150 млн $</span>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <p>Источник: Национальный статистический комитет Республики Беларусь (Белстат), 2021 г. Базовая карта: © OpenStreetMap contributors.</p>
+  <p>Размер маркера пропорционален √(объём экспорта)</p>
+</div>
+
+<script>
+// ============================================================
+// ДАННЫЕ
+// ============================================================
+const countries = [
+  {
+    name: "Россия", flag: "🇷🇺",
+    coords: [55.75, 37.62],
+    value: 2799.2, share: 29.1,
+    sector: "Транспорт / Деловые",
+    desc: "Крупнейший торговый партнёр. Белорусские транспортные компании обеспечивают значительный объём грузоперевозок; строительные организации реализуют проекты на территории РФ.",
+    it: 280, transport: 1120, construction: 490,
+  },
+  {
+    name: "США", flag: "🇺🇸",
+    coords: [38.91, -77.04],
+    value: 1510.6, share: 15.7,
+    sector: "IT и программное ПО",
+    desc: "Ключевой рынок сбыта для резидентов Парка высоких технологий. Белорусские IT-компании поставляют программное обеспечение и аутсорсинговые услуги американским корпорациям.",
+    it: 1200, transport: 40, construction: 0,
+  },
+  {
+    name: "Германия", flag: "🇩🇪",
+    coords: [52.52, 13.41],
+    value: 532.3, share: 5.5,
+    sector: "Транспорт / Логистика",
+    desc: "Ключевой партнёр в ЕС. Транспортные и логистические услуги доминируют — Беларусь остаётся важным транзитным коридором на оси Восток–Запад.",
+    it: 95, transport: 310, construction: 42,
+  },
+  {
+    name: "Кипр", flag: "🇨🇾",
+    coords: [35.17, 33.37],
+    value: 394.5, share: 4.1,
+    sector: "Финансовые / Корпоративные",
+    desc: "Значительный объём обусловлен корпоративными и финансовыми услугами в рамках офшорных структур — регистрация компаний, юридическое сопровождение.",
+    it: 60, transport: 18, construction: 5,
+  },
+  {
+    name: "Литва", flag: "🇱🇹",
+    coords: [54.69, 25.28],
+    value: 352.1, share: 3.7,
+    sector: "Транспорт / Транзит",
+    desc: "Важнейший транзитный партнёр: порт Клайпеда служит воротами для белорусского экспорта на мировые рынки. Автомобильные и железнодорожные перевозки составляют основу.",
+    it: 22, transport: 265, construction: 18,
+  },
+  {
+    name: "Китай", flag: "🇨🇳",
+    coords: [39.90, 116.41],
+    value: 345.5, share: 3.6,
+    sector: "Строительство / Транспорт",
+    desc: "Растущее направление в рамках инициативы «Пояс и путь». Белорусские строительные организации участвуют в реализации совместных проектов на территории КНР.",
+    it: 45, transport: 120, construction: 135,
+  },
+  {
+    name: "Великобритания", flag: "🇬🇧",
+    coords: [51.51, -0.13],
+    value: 342.8, share: 3.6,
+    sector: "IT и финансовые",
+    desc: "Экспорт преимущественно в сфере IT-аутсорсинга и финансовых услуг; лондонский рынок исторически привлекал белорусские технологические компании.",
+    it: 195, transport: 55, construction: 8,
+  },
+  {
+    name: "Польша", flag: "🇵🇱",
+    coords: [52.23, 21.01],
+    value: 314.2, share: 3.3,
+    sector: "Транспорт / Туризм",
+    desc: "Ключевой сосед: перевозки через польско-белорусскую границу формируют значительный объём транспортного экспорта. Также развит деловой туризм и образовательные услуги.",
+    it: 48, transport: 195, construction: 28,
+  },
+  {
+    name: "Украина", flag: "🇺🇦",
+    coords: [50.45, 30.52],
+    value: 209.4, share: 2.2,
+    sector: "Транспорт / Строительство",
+    desc: "Традиционный партнёр по транспортным услугам и строительным подрядам. Данные относятся к 2021 году — до полномасштабной войны.",
+    it: 30, transport: 95, construction: 55,
+  },
+  {
+    name: "Швейцария", flag: "🇨🇭",
+    coords: [46.95, 7.45],
+    value: 189.1, share: 2.0,
+    sector: "Финансовые / IT",
+    desc: "Экспорт финансовых и страховых услуг, а также IT-решений для швейцарских корпораций. Небольшой, но высокомаржинальный рынок.",
+    it: 88, transport: 22, construction: 4,
+  },
+];
+
+const MAX_VAL = Math.max(...countries.map(c => c.value));
+
+// ============================================================
+// КАРТА
+// ============================================================
+const map = L.map('map', { zoomControl: true }).setView([48, 25], 3);
+
+// Тёмная подложка от CartoDB
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter_no_labels/{z}/{x}/{y}{r}.png', {
+  maxZoom: 18, minZoom: 2,
+  subdomains: 'abcd'
+}).addTo(map);
+
+// Подложка с названиями (поверх)
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 18,
+  minZoom: 2,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+// Линии от Минска
+const MINSK = [53.9045, 27.5615];
+
+function getColor(val) {
+  if (val > 1000) return '#b83215';
+  if (val > 500)  return '#c8501a';
+  if (val > 300)  return '#1a6e8e';
+  if (val > 150)  return '#1a8e6e';
+  return '#8a8278';
+}
+
+function getRadius(val) {
+  return Math.min(Math.max(Math.sqrt(val) * 0.9, 8), 48);
+}
+
+// Слои для вкладок
+let currentLayer = 'all';
+const markers = [];
+const lines = [];
+
+function getLayerValue(c, layer) {
+  if (layer === 'it')           return c.it;
+  if (layer === 'transport')    return c.transport;
+  if (layer === 'construction') return c.construction;
+  return c.value;
+}
+
+function buildRankPanel() {
+  const sorted = [...countries].sort((a,b) =>
+    getLayerValue(b, currentLayer) - getLayerValue(a, currentLayer));
+  const maxV = getLayerValue(sorted[0], currentLayer);
+  const list = document.getElementById('rankList');
+  list.innerHTML = sorted.map((c, i) => {
+    const v = getLayerValue(c, currentLayer);
+    const pct = maxV > 0 ? (v / maxV * 100) : 0;
+    return `<div class="rank-item" onclick="focusCountry('${c.name}')">
+      <span class="rank-num">${i+1}</span>
+      <div class="rank-bar-wrap">
+        <div class="rank-country">${c.flag} ${c.name}</div>
+        <div class="rank-track"><div class="rank-fill" style="width:${pct}%"></div></div>
+      </div>
+      <span class="rank-val">${v > 0 ? v.toFixed(0) : '—'}</span>
+    </div>`;
+  }).join('');
+}
+
+function drawMarkers() {
+  markers.forEach(m => m.remove());
+  lines.forEach(l => l.remove());
+  markers.length = 0; lines.length = 0;
+
+  countries.forEach(c => {
+    const v = getLayerValue(c, currentLayer);
+    if (v <= 0) return;
+
+    // Линия от Минска
+    const line = L.polyline([MINSK, c.coords], {
+      color: getColor(v),
+      weight: currentLayer === 'all' ? Math.max(1, v / 800) : 1.5,
+      opacity: 0.35,
+      dashArray: '4 6'
+    }).addTo(map);
+    lines.push(line);
+
+    // Маркер
+    const circle = L.circleMarker(c.coords, {
+      radius: getRadius(v),
+      fillColor: getColor(v),
+      color: '#ffffff',
+      weight: 1.5,
+      opacity: 0.9,
+      fillOpacity: 0.78
+    }).addTo(map);
+    markers.push(circle);
+
+    circle.on('click', () => showInfo(c, v));
+    circle.on('mouseover', () => {
+  showInfo(c, v);
+});
+    circle.on('mouseover', function() {
+      this.setStyle({ fillOpacity: 0.95, weight: 2.5, color: '#f7f4ee' });
+    });
+    circle.on('mouseout', function() {
+      this.setStyle({ fillOpacity: 0.78, weight: 1.5, color: '#ffffff' });
+    });
+
+    // Подпись
+    const label = L.divIcon({
+      className: '',
+      html: `<span style="
+  font-family:'IBM Plex Sans',sans-serif;
+  font-size:11px;
+  font-weight:500;
+  color:#111;
+  text-shadow:0 1px 2px rgba(255,255,255,0.8);
+  white-space:nowrap;
+  pointer-events:none;
+  display:block;
+  text-align:center;
+  margin-top:${getRadius(v)+3}px;
+"> ${c.name} </span>`,
+      iconSize: [80, 20],
+      iconAnchor: [40, 0]
+    });
+    const labelMarker = L.marker(c.coords, { icon: label, interactive: false }).addTo(map);
+    markers.push(labelMarker);
+  });
+
+  // Минск
+  const bMarker = L.circleMarker(MINSK, {
+    radius: 6, fillColor: '#f7f4ee', color: '#0f1923', weight: 2, fillOpacity: 1
+  }).addTo(map);
+  bMarker.bindTooltip('Минск (источник экспорта)', { permanent: false, direction: 'right' });
+  markers.push(bMarker);
+}
+
+function showInfo(c, displayVal) {
+  document.getElementById('iFlag').textContent  = c.flag;
+  document.getElementById('iName').textContent  = c.name;
+  document.getElementById('iVal').textContent   = displayVal.toFixed(1) + ' млн $';
+  document.getElementById('iShare').textContent = c.share + '%';
+  document.getElementById('iSector').textContent= c.sector;
+  document.getElementById('iDesc').textContent  = c.desc;
+  document.getElementById('iBar').style.width   = (c.share / 30 * 100).toFixed(1) + '%';
+  const panel = document.getElementById('infoPanel');
+  panel.classList.remove('hidden');
+}
+
+function focusCountry(name) {
+  const c = countries.find(x => x.name === name);
+  if (!c) return;
+  map.flyTo(c.coords, 5, { duration: 1.2 });
+  const v = getLayerValue(c, currentLayer);
+  showInfo(c, v);
+}
+
+window.setLayer = function(layer) {
+  currentLayer = layer;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  drawMarkers();
+  buildRankPanel();
+  document.getElementById('infoPanel').classList.add('hidden');
+};
+
+window.focusCountry = focusCountry;
+
+// Закрытие панели по клику на карту
+map.on('click', (e) => {
+  if (!e.originalEvent.target.closest) return;
+  document.getElementById('infoPanel').classList.add('hidden');
+});
+
+// Масштабная линейка
+L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map);
+
+// Инициализация
+drawMarkers();
+buildRankPanel();
+</script>
+</body>
+</html>
